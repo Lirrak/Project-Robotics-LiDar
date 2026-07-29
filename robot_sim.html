@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reinforcement Learning AI Robot Simulator</title>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, sans-serif; }
+        body {
+            background-color: #090d16;
+            color: #e2e8f0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #sidebar {
+            width: 360px;
+            background: #111827;
+            border-right: 1px solid #1f2937;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-shadow: 4px 0 15px rgba(0,0,0,0.5);
+            z-index: 10;
+            overflow-y: auto;
+        }
+        h1 { font-size: 1.15rem; color: #38bdf8; text-transform: uppercase; letter-spacing: 1px; }
+        .card {
+            background: #1f2937;
+            border: 1px solid #374151;
+            padding: 12px;
+            border-radius: 8px;
+        }
+        .card-title {
+            font-size: 0.8rem;
+            color: #9ca3af;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.8rem;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: #374151;
+            color: #ef4444;
+        }
+        .status-badge.connected { color: #10b981; background: #064e3b; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+        
+        .stat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .stat-box {
+            background: #111827;
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid #1f2937;
+        }
+        .stat-label { font-size: 0.7rem; color: #6b7280; }
+        .stat-value { font-size: 1rem; font-weight: bold; color: #38bdf8; font-family: monospace; }
+
+        #main-view {
+            flex: 1;
+            position: relative;
+            background: radial-gradient(circle, #0f172a 0%, #020617 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        canvas { display: block; border-radius: 12px; box-shadow: 0 0 40px rgba(0,0,0,0.8); }
+
+        .btn {
+            background: #0284c7;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+            transition: background 0.2s;
+            font-size: 0.85rem;
+            margin-bottom: 4px;
+        }
+        .btn:hover { background: #0369a1; }
+        .btn-rl { background: linear-gradient(135deg, #10b981 0%, #059669 100%); font-size:0.95rem; }
+        .btn-rl.active { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow:0 0 15px rgba(239,68,68,0.5); }
+        .btn-demo { background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); }
+        .btn-real { background: linear-gradient(135deg, #ec4899 0%, #be185d 100%); }
+
+        input[type="text"] {
+            width: 100%;
+            background: #111827;
+            border: 1px solid #374151;
+            color: #38bdf8;
+            padding: 6px 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <div>
+            <h1>Mô Phỏng AI Robot (RL)</h1>
+            <p style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">Reinforcement Learning Q-Learning Simulator</p>
+        </div>
+
+        <div class="card" style="border-color:#10b981;">
+            <div class="card-title" style="color:#10b981;">🎮 Bật Chế Độ Học Củng Cố (RL Agent)</div>
+            <button id="btnRL" class="btn btn-rl" onclick="toggleRLMode()">🎮 CHẠY REINFORCEMENT LEARNING</button>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Nguồn Bản Đồ LiDAR</div>
+            <input type="text" id="piIp" value="192.168.79.24">
+            <button class="btn" onclick="connectRos()">🔌 1. Kết nối Raspberry Pi</button>
+            <button class="btn btn-real" onclick="captureRealLidarMap()">📡 2. KHÓA BẢN ĐỒ LIDAR THỰC TẾ</button>
+            <button class="btn btn-demo" style="margin-top:6px;" onclick="generateDemoRoomMap()">🏠 Chuyển Sang Bản Đồ Giả Lập Demo</button>
+
+            <div style="margin-top: 8px;">
+                <div id="statusBadge" class="status-badge">
+                    <div class="dot"></div>
+                    <span id="statusText">Bản đồ Giả lập Demo</span>
+                </div>
+            </div>
+            <div id="scanTopicStatus" style="font-size:0.75rem; color:#9ca3af; margin-top:4px;">
+                Topic /scan: Chưa nhận dữ liệu
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Chỉ Số Học Tập RL (RL Metrics)</div>
+            <div class="stat-grid">
+                <div class="stat-box">
+                    <div class="stat-label">Số Tập (Episode)</div>
+                    <div class="stat-value" id="rlEpisode" style="color:#10b981;">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Điểm Thưởng (Reward)</div>
+                    <div class="stat-value" id="rlReward" style="color:#f59e0b;">0.0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Số Lần Va Chạm</div>
+                    <div class="stat-value" id="rlCrashes" style="color:#ef4444;">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Tỷ Lệ Thám Hiểm (ε)</div>
+                    <div class="stat-value" id="rlEpsilon" style="color:#a78bfa;">1.00</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Các Chế Độ Khác</div>
+            <button id="btnPID" class="btn" style="background:#374151;" onclick="setMode('PID')">🤖 Chạy Bám Tường PID (Luật Cứng)</button>
+            <button id="btnManual" class="btn" style="background:#374151;" onclick="setMode('MANUAL')">🎮 Điều Khiển Bằng Bàn Phím (WASD)</button>
+        </div>
+
+        <button class="btn" style="background: #374151;" onclick="resetRobot()">Reset Vị Trí Xe Về Tâm</button>
+    </div>
+
+    <div id="main-view">
+        <canvas id="simCanvas" width="850" height="780"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const L = 0.20;
+        const scale = 85;
+
+        let robot = { x: 0, y: 0, theta: 0, v: 0, w: 0, maxV: 0.35, maxW: 1.5 };
+        let fixedMapPoints = [];
+        let driveMode = "MANUAL";
+        let liveScanActive = false;
+
+        // Reinforcement Learning State & Q-Table
+        let rlEpisode = 0;
+        let rlTotalReward = 0;
+        let rlCrashes = 0;
+        let rlEpsilon = 1.0;
+        const rlGamma = 0.95;
+        const rlAlpha = 0.2;
+
+        const actions = [
+            { v: 0.30, w: 0.0 },   // Straight
+            { v: 0.20, w: 0.9 },   // Turn Left
+            { v: 0.20, w: -0.9 },  // Turn Right
+            { v: 0.05, w: 1.4 },   // Sharp Left
+            { v: 0.05, w: -1.4 }   // Sharp Right
+        ];
+
+        let qTable = {};
+        let lastStateKey = null;
+        let lastActionIdx = 0;
+
+        let trajectory = [];
+        let keys = { w: false, a: false, s: false, d: false };
+
+        let ros = null, scanSub = null, cmdVelPub = null, lastScanData = null;
+        let sensorFront = 999, sensorRight = 999, sensorFR = 999;
+        let scanMsgCount = 0;
+
+        function generateDemoRoomMap() {
+            liveScanActive = false;
+            fixedMapPoints = [];
+            const w = 4.0; const h = 5.0; const step = 0.05;
+
+            for (let x = -w/2; x <= w/2; x += step) {
+                fixedMapPoints.push({ x: x, y: h/2 });
+                fixedMapPoints.push({ x: x, y: -h/2 });
+            }
+            for (let y = -h/2; y <= h/2; y += step) {
+                fixedMapPoints.push({ x: -w/2, y: y });
+                fixedMapPoints.push({ x: w/2, y: y });
+            }
+
+            const badge = document.getElementById('statusBadge');
+            badge.className = "status-badge connected";
+            document.getElementById('statusText').innerText = "Bản đồ Giả lập Demo";
+        }
+
+        function captureRealLidarMap() {
+            if (!lastScanData || !lastScanData.ranges) {
+                alert("Chưa nhận được gói tin /scan từ Raspberry Pi!\n\nHãy đảm bảo bạn đã mở rplidar_node trên Pi bằng lệnh:\nros2 launch rplidar_ros rplidar_a1_launch.py");
+                return;
+            }
+
+            fixedMapPoints = [];
+            const ranges = lastScanData.ranges;
+            const angleMin = lastScanData.angle_min;
+            const angleInc = lastScanData.angle_increment;
+
+            for (let i = 0; i < ranges.length; i++) {
+                const r = ranges[i];
+                if (r < lastScanData.range_min || r > lastScanData.range_max || isNaN(r)) continue;
+                const angle = angleMin + i * angleInc;
+                fixedMapPoints.push({ x: r * Math.cos(angle), y: r * Math.sin(angle) });
+            }
+
+            liveScanActive = true;
+            const badge = document.getElementById('statusBadge');
+            badge.className = "status-badge connected";
+            document.getElementById('statusText').innerText = `Đã Khóa Bản Đồ LiDAR (${fixedMapPoints.length} điểm)`;
+        }
+
+        function setMode(mode) {
+            driveMode = mode;
+            const btnRL = document.getElementById('btnRL');
+            if (driveMode === "RL") {
+                btnRL.className = "btn btn-rl active";
+                btnRL.innerText = "🛑 DỪNG REINFORCEMENT LEARNING";
+            } else {
+                btnRL.className = "btn btn-rl";
+                btnRL.innerText = "🎮 CHẠY REINFORCEMENT LEARNING";
+                robot.v = 0; robot.w = 0;
+            }
+        }
+
+        function toggleRLMode() {
+            if (driveMode === "RL") setMode("MANUAL");
+            else setMode("RL");
+        }
+
+        function connectRos() {
+            const ip = document.getElementById('piIp').value.trim();
+            const wsUrl = `ws://${ip}:9090`;
+            const badge = document.getElementById('statusBadge');
+            const statusText = document.getElementById('statusText');
+            const topicStatus = document.getElementById('scanTopicStatus');
+
+            if (ros) { try { ros.close(); } catch(e){} }
+            statusText.innerText = "Đang kết nối...";
+
+            ros = new ROSLIB.Ros({ url: wsUrl });
+
+            ros.on('connection', () => {
+                badge.className = "status-badge connected";
+                statusText.innerText = "Đã kết nối Rosbridge";
+                
+                scanSub = new ROSLIB.Topic({ ros: ros, name: '/scan', messageType: 'sensor_msgs/msg/LaserScan' });
+                scanSub.subscribe((msg) => {
+                    lastScanData = msg;
+                    scanMsgCount++;
+                    topicStatus.innerText = `Topic /scan: Đang nhận ok (${scanMsgCount} msgs)`;
+                    topicStatus.style.color = "#10b981";
+
+                    // Auto capture map on first subscription
+                    if (!liveScanActive) {
+                        captureRealLidarMap();
+                    }
+                });
+
+                cmdVelPub = new ROSLIB.Topic({ ros: ros, name: '/cmd_vel', messageType: 'geometry_msgs/msg/Twist' });
+            });
+
+            ros.on('error', () => {
+                badge.className = "status-badge";
+                statusText.innerText = "Lỗi WebSocket!";
+                topicStatus.innerText = "Lỗi kết nối cổng 9090";
+                topicStatus.style.color = "#ef4444";
+            });
+
+            ros.on('close', () => {
+                badge.className = "status-badge";
+                statusText.innerText = "Ngắt kết nối";
+            });
+        }
+
+        function updateSensorsFromMap() {
+            if (fixedMapPoints.length === 0) return;
+
+            function getRayDistance(relAngleDeg) {
+                const rayRad = robot.theta + (relAngleDeg * Math.PI / 180);
+                const dirX = Math.cos(rayRad);
+                const dirY = Math.sin(rayRad);
+
+                let minDist = 999;
+                for (let i = 0; i < fixedMapPoints.length; i++) {
+                    const pt = fixedMapPoints[i];
+                    const dx = pt.x - robot.x;
+                    const dy = pt.y - robot.y;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist < 0.05) continue;
+
+                    const dot = (dx * dirX + dy * dirY) / dist;
+                    if (dot > 0.94) {
+                        if (dist < minDist) minDist = dist;
+                    }
+                }
+                return minDist;
+            }
+
+            sensorFront = getRayDistance(0);
+            sensorRight = getRayDistance(-90);
+            sensorFR = getRayDistance(-45);
+        }
+
+        function getDiscreteStateKey() {
+            const discF = Math.min(3, Math.floor(sensorFront / 0.5));
+            const discR = Math.min(3, Math.floor(sensorRight / 0.3));
+            const discFR = Math.min(3, Math.floor(sensorFR / 0.4));
+            return `${discF}_${discR}_${discFR}`;
+        }
+
+        function getQValues(stateKey) {
+            if (!qTable[stateKey]) {
+                qTable[stateKey] = [0, 0, 0, 0, 0];
+            }
+            return qTable[stateKey];
+        }
+
+        function stepReinforcementLearning() {
+            const currentStateKey = getDiscreteStateKey();
+
+            let reward = 0;
+            let crashed = false;
+
+            if (sensorFront < 0.25 || sensorRight < 0.15) {
+                reward = -50.0;
+                crashed = true;
+            } else {
+                reward += robot.v * 2.0;
+                const rightDist = Math.min(sensorRight, sensorFR);
+                const wallErr = Math.abs(rightDist - 0.5);
+                reward += (1.0 - wallErr * 2.0);
+            }
+
+            rlTotalReward += reward;
+
+            if (lastStateKey !== null) {
+                const oldQ = getQValues(lastStateKey)[lastActionIdx];
+                const maxNextQ = Math.max(...getQValues(currentStateKey));
+                const newQ = oldQ + rlAlpha * (reward + rlGamma * maxNextQ - oldQ);
+                getQValues(lastStateKey)[lastActionIdx] = newQ;
+            }
+
+            if (crashed) {
+                rlCrashes++;
+                rlEpisode++;
+                rlEpsilon = Math.max(0.05, rlEpsilon * 0.96);
+                resetRobot();
+                lastStateKey = null;
+                return { v: 0, w: 0 };
+            }
+
+            let actionIdx = 0;
+            if (Math.random() < rlEpsilon) {
+                actionIdx = Math.floor(Math.random() * actions.length);
+            } else {
+                const qVals = getQValues(currentStateKey);
+                actionIdx = qVals.indexOf(Math.max(...qVals));
+            }
+
+            lastStateKey = currentStateKey;
+            lastActionIdx = actionIdx;
+
+            document.getElementById('rlEpisode').innerText = rlEpisode;
+            document.getElementById('rlReward').innerText = rlTotalReward.toFixed(1);
+            document.getElementById('rlCrashes').innerText = rlCrashes;
+            document.getElementById('rlEpsilon').innerText = rlEpsilon.toFixed(2);
+
+            return actions[actionIdx];
+        }
+
+        function calculatePIDWallFollowing() {
+            const targetDistance = 0.5;
+            const Kp = 2.4;
+            let targetV = 0.25;
+            let targetW = 0.0;
+
+            if (sensorFront < 0.55) {
+                targetV = 0.05; targetW = 1.4;
+            } else {
+                let currentRightDist = Math.min(sensorRight, sensorFR);
+                if (currentRightDist > 2.0) {
+                    targetV = 0.2; targetW = -0.45;
+                } else {
+                    const error = targetDistance - currentRightDist;
+                    targetW = Kp * error;
+                    targetW = Math.max(-robot.maxW, Math.min(robot.maxW, targetW));
+                }
+            }
+            return { v: targetV, w: targetW };
+        }
+
+        function resetRobot() {
+            robot.x = 0; robot.y = 0; robot.theta = 0; robot.v = 0; robot.w = 0;
+            trajectory = [];
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (driveMode !== "MANUAL") return;
+            const k = e.key.toLowerCase();
+            if (k === 'w' || k === 'arrowup') keys.w = true;
+            if (k === 's' || k === 'arrowdown') keys.s = true;
+            if (k === 'a' || k === 'arrowleft') keys.a = true;
+            if (k === 'd' || k === 'arrowright') keys.d = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (driveMode !== "MANUAL") return;
+            const k = e.key.toLowerCase();
+            if (k === 'w' || k === 'arrowup') keys.w = false;
+            if (k === 's' || k === 'arrowdown') keys.s = false;
+            if (k === 'a' || k === 'arrowleft') keys.a = false;
+            if (k === 'd' || k === 'arrowright') keys.d = false;
+        });
+
+        let lastTime = performance.now();
+
+        function updateKinematics(dt) {
+            updateSensorsFromMap();
+
+            let targetV = 0;
+            let targetW = 0;
+
+            if (driveMode === "RL") {
+                const rlCmd = stepReinforcementLearning();
+                targetV = rlCmd.v;
+                targetW = rlCmd.w;
+            } else if (driveMode === "PID") {
+                const pidCmd = calculatePIDWallFollowing();
+                targetV = pidCmd.v;
+                targetW = pidCmd.w;
+            } else {
+                if (keys.w) targetV += robot.maxV;
+                if (keys.s) targetV -= robot.maxV;
+                if (keys.a) targetW += robot.maxW;
+                if (keys.d) targetW -= robot.maxW;
+            }
+
+            robot.v += (targetV - robot.v) * 0.2;
+            robot.w += (targetW - robot.w) * 0.2;
+
+            if (Math.abs(robot.v) < 0.001) robot.v = 0;
+            if (Math.abs(robot.w) < 0.001) robot.w = 0;
+
+            robot.theta += robot.w * dt;
+            robot.x += robot.v * Math.cos(robot.theta) * dt;
+            robot.y += robot.v * Math.sin(robot.theta) * dt;
+
+            if (trajectory.length === 0 || Math.hypot(robot.x - trajectory[trajectory.length-1].x, robot.y - trajectory[trajectory.length-1].y) > 0.03) {
+                trajectory.push({ x: robot.x, y: robot.y });
+                if (trajectory.length > 700) trajectory.shift();
+            }
+
+            if (cmdVelPub && ros && ros.isConnected) {
+                const twist = new ROSLIB.Message({
+                    linear: { x: robot.v, y: 0, z: 0 },
+                    angular: { x: 0, y: 0, z: robot.w }
+                });
+                cmdVelPub.publish(twist);
+            }
+        }
+
+        function drawGrid() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+            ctx.lineWidth = 1;
+            const gridStep = scale;
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+
+            for (let x = cx % gridStep; x < canvas.width; x += gridStep) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+            }
+            for (let y = cy % gridStep; y < canvas.height; y += gridStep) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+            }
+        }
+
+        function drawFixedMap() {
+            if (fixedMapPoints.length === 0) return;
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+
+            ctx.fillStyle = "#ff2e63";
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = "#ff2e63";
+
+            for (let i = 0; i < fixedMapPoints.length; i++) {
+                const pt = fixedMapPoints[i];
+                const px = cx + pt.x * scale;
+                const py = cy - pt.y * scale;
+                ctx.beginPath(); ctx.arc(px, py, 2.5, 0, 2 * Math.PI); ctx.fill();
+            }
+            ctx.shadowBlur = 0;
+        }
+
+        function drawTrajectory() {
+            if (trajectory.length < 2) return;
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+
+            ctx.beginPath();
+            for (let i = 0; i < trajectory.length; i++) {
+                const px = cx + trajectory[i].x * scale;
+                const py = cy - trajectory[i].y * scale;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.strokeStyle = (driveMode === "RL") ? "rgba(16, 185, 129, 0.7)" : (driveMode === "PID") ? "rgba(56, 189, 248, 0.7)" : "rgba(245, 158, 11, 0.5)";
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([4, 4]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        function drawMovingRobot() {
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const robotPxX = cx + robot.x * scale;
+            const robotPxY = cy - robot.y * scale;
+
+            ctx.save();
+            ctx.translate(robotPxX, robotPxY);
+            ctx.rotate(-robot.theta);
+
+            const radiusPx = (L / 2 + 0.05) * scale;
+
+            ctx.beginPath();
+            ctx.arc(0, 0, radiusPx, 0, 2 * Math.PI);
+            ctx.fillStyle = (driveMode === "RL") ? "#064e3b" : "#1e293b";
+            ctx.strokeStyle = (driveMode === "RL") ? "#10b981" : "#38bdf8";
+            ctx.lineWidth = 3;
+            ctx.fill(); ctx.stroke();
+
+            const wheelW = 0.08 * scale;
+            const wheelH = 0.03 * scale;
+            const wheelOffset = (L / 2) * scale;
+
+            ctx.fillStyle = "#64748b";
+            ctx.fillRect(-wheelW/2, -wheelOffset - wheelH/2, wheelW, wheelH);
+            ctx.fillRect(-wheelW/2, wheelOffset - wheelH/2, wheelW, wheelH);
+
+            ctx.beginPath();
+            ctx.moveTo(radiusPx, 0); ctx.lineTo(radiusPx - 10, -8); ctx.lineTo(radiusPx - 10, 8);
+            ctx.closePath(); ctx.fillStyle = "#00f2fe"; ctx.fill();
+
+            ctx.beginPath(); ctx.arc(0, 0, 0.04 * scale, 0, 2 * Math.PI);
+            ctx.fillStyle = "#ef4444"; ctx.fill();
+
+            ctx.restore();
+
+            function drawRay(dist, relAngleDeg, color, label) {
+                if (dist > 5) return;
+                const rad = robot.theta + (relAngleDeg * Math.PI / 180);
+                const px = robotPxX + dist * Math.cos(rad) * scale;
+                const py = robotPxY - dist * Math.sin(rad) * scale;
+                ctx.beginPath(); ctx.moveTo(robotPxX, robotPxY); ctx.lineTo(px, py);
+                ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+            }
+
+            drawRay(sensorFront, 0, "#f59e0b", "F");
+            drawRay(sensorRight, -90, "#10b981", "R");
+            drawRay(sensorFR, -45, "#3b82f6", "FR");
+        }
+
+        function mainLoop(now) {
+            const dt = Math.min((now - lastTime) / 1000, 0.1);
+            lastTime = now;
+
+            updateKinematics(dt);
+
+            drawGrid();
+            drawFixedMap();
+            drawTrajectory();
+            drawMovingRobot();
+
+            requestAnimationFrame(mainLoop);
+        }
+
+        generateDemoRoomMap();
+        connectRos();
+        requestAnimationFrame(mainLoop);
+    </script>
+</body>
+</html>

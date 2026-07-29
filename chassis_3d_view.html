@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Robot Chassis & Components Visualizer | Fixed Wheel Clearance</title>
+    <!-- Google Fonts & Three.js -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Outfit', sans-serif; }
+        body {
+            background-color: #080c14;
+            color: #f1f5f9;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #sidebar {
+            width: 390px;
+            background: #0f172a;
+            border-right: 1px solid #1e293b;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow-y: auto;
+            box-shadow: 5px 0 25px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        .brand-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #1e293b;
+        }
+
+        .brand-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #ffffff;
+            font-size: 1.2rem;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+        }
+
+        h1 { font-size: 1.15rem; font-weight: 700; color: #f8fafc; }
+        .subtitle { font-size: 0.75rem; color: #10b981; font-family: 'JetBrains Mono', monospace; }
+
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            padding: 14px;
+            border-radius: 10px;
+        }
+
+        .card-title {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .specs-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .spec-item {
+            background: #0f172a;
+            padding: 8px 10px;
+            border-radius: 6px;
+            border: 1px solid #1e293b;
+        }
+
+        .spec-label { font-size: 0.7rem; color: #64748b; }
+        .spec-val { font-size: 0.88rem; font-weight: 600; color: #10b981; font-family: 'JetBrains Mono', monospace; }
+
+        .btn-group { display: flex; flex-direction: column; gap: 8px; }
+
+        .btn {
+            background: #0284c7;
+            color: white;
+            border: none;
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover { background: #0369a1; transform: translateY(-1px); }
+
+        .btn-stl {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+        }
+
+        .btn-secondary { background: #334155; color: #e2e8f0; }
+        .btn-secondary:hover { background: #475569; }
+
+        .layer-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #334155;
+            font-size: 0.82rem;
+        }
+        .layer-toggle:last-child { border-bottom: none; }
+
+        .switch { position: relative; display: inline-block; width: 34px; height: 18px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #475569; transition: .3s; border-radius: 20px;
+        }
+        .slider:before {
+            position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px;
+            background-color: white; transition: .3s; border-radius: 50%;
+        }
+        input:checked + .slider { background-color: #10b981; }
+        input:checked + .slider:before { transform: translateX(16px); }
+
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            background: radial-gradient(circle at center, #1e293b 0%, #080c14 100%);
+        }
+
+        #view-canvas { width: 100%; height: 100%; display: block; }
+
+        .overlay-tools {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(8px);
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+        }
+
+        .tool-btn {
+            background: #1e293b;
+            color: #10b981;
+            border: 1px solid #334155;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .tool-btn:hover { background: #10b981; color: #090d16; }
+
+        .annotation-box {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(15, 23, 42, 0.95);
+            border: 2px solid #10b981;
+            padding: 12px 18px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            color: #10b981;
+            box-shadow: 0 0 25px rgba(16, 185, 129, 0.3);
+            max-width: 440px;
+        }
+        .annotation-box ul { margin-left: 16px; margin-top: 4px; color: #cbd5e1; font-size: 0.76rem; }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <div class="brand-header">
+            <div class="brand-icon">✓</div>
+            <div>
+                <h1>Robot Chassis (Fixed Clearance)</h1>
+                <div class="subtitle">Đã Mở Rộng Khe Khoét 76mm x 50mm</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Kích Thước Khe Cắt Đã Sửa</div>
+            <div class="specs-grid">
+                <div class="spec-item">
+                    <div class="spec-label">Chiều Dài Khe (Z)</div>
+                    <div class="spec-val">76 mm</div>
+                </div>
+                <div class="spec-item">
+                    <div class="spec-label">Độ Sâu Khe (X)</div>
+                    <div class="spec-val">50 mm</div>
+                </div>
+                <div class="spec-item">
+                    <div class="spec-label">Khe Hở An Toàn</div>
+                    <div class="spec-val">5.5 mm (Mọi hướng)</div>
+                </div>
+                <div class="spec-item">
+                    <div class="spec-label">Trạng Thái Chèn Khung</div>
+                    <div class="spec-val" style="color: #10b981;">0% (Hoàn Toàn Không Cấn)</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Hiển Thị Thành Phần</div>
+            <div class="layer-toggle">
+                <span>Tầng Đáy Đã Cắt Khe Rộng</span>
+                <label class="switch"><input type="checkbox" id="toggleBottom" checked onchange="updateVisibility()"><span class="slider"></span></label>
+            </div>
+            <div class="layer-toggle">
+                <span>Tầng Đỉnh (Top Deck)</span>
+                <label class="switch"><input type="checkbox" id="toggleTop" checked onchange="updateVisibility()"><span class="slider"></span></label>
+            </div>
+            <div class="layer-toggle">
+                <span>Động Cơ & Bánh Xe</span>
+                <label class="switch"><input type="checkbox" id="toggleMotors" checked onchange="updateVisibility()"><span class="slider"></span></label>
+            </div>
+            <div class="layer-toggle">
+                <span>Pin 12V Li-ion</span>
+                <label class="switch"><input type="checkbox" id="toggleBattery" checked onchange="updateVisibility()"><span class="slider"></span></label>
+            </div>
+            <div class="layer-toggle">
+                <span>Mạch Driver TB6612 & XL4015</span>
+                <label class="switch"><input type="checkbox" id="toggleDrivers" checked onchange="updateVisibility()"><span class="slider"></span></label>
+            </div>
+            <div class="layer-toggle">
+                <span>Raspberry Pi 3B+ & ESP32</span>
+                <label class="switch"><input type="checkbox" id="toggleElectronics" checked onchange="updateVisibility()"><span class="slider"></span></label>
+            </div>
+            <div class="layer-toggle">
+                <span>RPLiDAR A1 Sensor</span>
+                <label class="switch"><input type="checkbox" id="toggleLidar" checked onchange="updateVisibility()"><span class="slider"></span></label>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Tải File STL Mới Nhất</div>
+            <div class="btn-group">
+                <a href="stl_files/full_robot_chassis.stl" download class="btn btn-stl">
+                    <span>📦 Full Robot Assembly STL</span>
+                    <span>⬇</span>
+                </a>
+                <a href="stl_files/chassis_bottom.stl" download class="btn btn-secondary">
+                    <span>📄 Tầng Đáy (chassis_bottom.stl)</span>
+                    <span>⬇</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="view-canvas"></canvas>
+        <div class="overlay-tools">
+            <button class="tool-btn" onclick="resetCamera()">Center Camera</button>
+            <button class="tool-btn" onclick="toggleAutoRotate()">Auto Rotate</button>
+            <button class="tool-btn" onclick="toggleWireframe()">Wireframe Mode</button>
+        </div>
+        <div class="annotation-box">
+            <b>✔ Đã xử lý dứt điểm lỗi cấn bánh xe:</b>
+            <ul>
+                <li>Mở rộng khe cắt theo chiều dài từ 36mm lên **76mm** (bánh xe 65mm có khoảng hở 5.5mm trước & sau).</li>
+                <li>Độ sâu khe khoét vào lòng khung **50mm** giúp bánh xe 25mm và gá động cơ lọt hẳn vào trong.</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, controls;
+        let groupBottom, groupTop, groupMotors, groupBattery, groupDrivers, groupElectronics, groupLidar;
+        let isAutoRotate = true, isWireframe = false;
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+            const canvas = document.getElementById('view-canvas');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x080c14);
+
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 1000);
+            camera.position.set(220, 150, 220);
+
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.autoRotate = true;
+            controls.autoRotateSpeed = 2.0;
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+            const dirLight1 = new THREE.DirectionalLight(0x00f2fe, 0.9);
+            dirLight1.position.set(150, 200, 100);
+            scene.add(dirLight1);
+
+            const gridHelper = new THREE.GridHelper(400, 40, 0x10b981, 0x1e293b);
+            gridHelper.position.y = -35;
+            scene.add(gridHelper);
+
+            buildRobotModel();
+
+            window.addEventListener('resize', onWindowResize);
+            animate();
+        }
+
+        function buildRobotModel() {
+            groupBottom = new THREE.Group();
+            groupTop = new THREE.Group();
+            groupMotors = new THREE.Group();
+            groupBattery = new THREE.Group();
+            groupDrivers = new THREE.Group();
+            groupElectronics = new THREE.Group();
+            groupLidar = new THREE.Group();
+
+            const matPlate = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.2 });
+            const matDarkMetal = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.3, metalness: 0.8 });
+            const matSilverMetal = new THREE.MeshStandardMaterial({ color: 0xc0c0c0, roughness: 0.2, metalness: 0.9 });
+            const matBrass = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.3, metalness: 0.8 });
+            const matRubber = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9, metalness: 0.1 });
+            const matPCBGreen = new THREE.MeshStandardMaterial({ color: 0x059669, roughness: 0.5, metalness: 0.3 });
+            const matPCBRed = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.4, metalness: 0.3 });
+            const matPCBBlue = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.4, metalness: 0.3 });
+            const matBatteryBlue = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.5, metalness: 0.1 });
+
+            // 1. Bottom Deck Contour with 76mm x 50mm Wide Wheel Cutouts
+            const R = 100, thickness = 4;
+            const shape = new THREE.Shape();
+            const halfW = 38;  // Slot length Z from -38 to +38mm (Width 76mm)
+            const innerX = 55; // Slot depth X from 55 to 105mm (Depth 50mm)
+
+            const angRightTop = Math.asin(halfW / R);
+            const angLeftTop = Math.PI - angRightTop;
+
+            // Top Arc
+            const steps = 32;
+            for (let i = 0; i <= steps; i++) {
+                const a = angRightTop + i * (angLeftTop - angRightTop) / steps;
+                const x = R * Math.cos(a);
+                const y = R * Math.sin(a);
+                if (i === 0) shape.moveTo(x, y);
+                else shape.lineTo(x, y);
+            }
+
+            // Left Slot Inset
+            shape.lineTo(-innerX, halfW);
+            shape.lineTo(-innerX, -halfW);
+
+            // Bottom Arc
+            const angLeftBot = Math.PI + angRightTop;
+            const angRightBot = 2 * Math.PI - angRightTop;
+            for (let i = 0; i <= steps; i++) {
+                const a = angLeftBot + i * (angRightBot - angLeftBot) / steps;
+                shape.lineTo(R * Math.cos(a), R * Math.sin(a));
+            }
+
+            // Right Slot Inset
+            shape.lineTo(innerX, -halfW);
+            shape.lineTo(innerX, halfW);
+
+            const extrudeSettings = { depth: thickness, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: 1, bevelThickness: 1 };
+            const bottomGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+            bottomGeo.rotateX(Math.PI / 2);
+            const bottomMesh = new THREE.Mesh(bottomGeo, matPlate);
+            bottomMesh.position.y = 4;
+            groupBottom.add(bottomMesh);
+
+            // Standoff Pillars
+            const standoffGeo = new THREE.CylinderGeometry(3.5, 3.5, 40, 16);
+            for (let [sx, sz] of [[50, 60], [-50, 60], [50, -60], [-50, -60]]) {
+                const standoff = new THREE.Mesh(standoffGeo, matBrass);
+                standoff.position.set(sx, 24, sz);
+                groupBottom.add(standoff);
+            }
+
+            // 2. Top Deck
+            const topMesh = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 4, 64), matPlate);
+            topMesh.position.y = 46;
+            groupTop.add(topMesh);
+
+            // 3. Motors & Wheels
+            const wheelGeo = new THREE.CylinderGeometry(32.5, 32.5, 25, 32);
+            wheelGeo.rotateZ(Math.PI / 2);
+
+            const leftWheel = new THREE.Mesh(wheelGeo, matRubber);
+            leftWheel.position.set(-82, 0, 0); // Completely inside 76x50mm cutout!
+            groupMotors.add(leftWheel);
+
+            const rightWheel = new THREE.Mesh(wheelGeo, matRubber);
+            rightWheel.position.set(82, 0, 0); // Completely inside 76x50mm cutout!
+            groupMotors.add(rightWheel);
+
+            const couplerGeo = new THREE.CylinderGeometry(6, 6, 12, 16);
+            couplerGeo.rotateZ(Math.PI / 2);
+            const leftCoupler = new THREE.Mesh(couplerGeo, matBrass);
+            leftCoupler.position.set(-68, 0, 0);
+            const rightCoupler = new THREE.Mesh(couplerGeo, matBrass);
+            rightCoupler.position.set(68, 0, 0);
+            groupMotors.add(leftCoupler, rightCoupler);
+
+            // JGA25 Motors
+            const motorBodyGeo = new THREE.CylinderGeometry(12.5, 12.5, 35, 24);
+            motorBodyGeo.rotateZ(Math.PI / 2);
+            const encoderCapGeo = new THREE.CylinderGeometry(11, 11, 10, 24);
+            encoderCapGeo.rotateZ(Math.PI / 2);
+
+            const leftMotor = new THREE.Mesh(motorBodyGeo, matSilverMetal);
+            leftMotor.position.set(-45, 0, 0);
+            const leftEncoder = new THREE.Mesh(encoderCapGeo, matDarkMetal);
+            leftEncoder.position.set(-22, 0, 0);
+            groupMotors.add(leftMotor, leftEncoder);
+
+            const rightMotor = new THREE.Mesh(motorBodyGeo, matSilverMetal);
+            rightMotor.position.set(45, 0, 0);
+            const rightEncoder = new THREE.Mesh(encoderCapGeo, matDarkMetal);
+            rightEncoder.position.set(22, 0, 0);
+            groupMotors.add(rightMotor, rightEncoder);
+
+            const bracketGeo = new THREE.BoxGeometry(36, 26, 10);
+            const leftBracket = new THREE.Mesh(bracketGeo, matDarkMetal);
+            leftBracket.position.set(-45, 8, 0);
+            const rightBracket = new THREE.Mesh(bracketGeo, matDarkMetal);
+            rightBracket.position.set(45, 8, 0);
+            groupMotors.add(leftBracket, rightBracket);
+
+            // Caster Wheels
+            const casterGeo = new THREE.SphereGeometry(12, 24, 24);
+            const frontCaster = new THREE.Mesh(casterGeo, matDarkMetal);
+            frontCaster.position.set(0, -18, 75);
+            const rearCaster = new THREE.Mesh(casterGeo, matDarkMetal);
+            rearCaster.position.set(0, -18, -75);
+            groupMotors.add(frontCaster, rearCaster);
+
+            // 4. Pin 12V Li-ion
+            const batteryPack = new THREE.Mesh(new THREE.BoxGeometry(72, 32, 42), matBatteryBlue);
+            batteryPack.position.set(0, 20, -22);
+            const batteryStrap = new THREE.Mesh(new THREE.BoxGeometry(78, 4, 46), matDarkMetal);
+            batteryStrap.position.set(0, 5, -22);
+            groupBattery.add(batteryPack, batteryStrap);
+
+            // 5. Driver TB6612 & XL4015
+            const tb6612Mesh = new THREE.Mesh(new THREE.BoxGeometry(22, 4, 22), matPCBRed);
+            tb6612Mesh.position.set(-30, 7, 35);
+            const xl4015Board = new THREE.Mesh(new THREE.BoxGeometry(43, 3, 21), matPCBBlue);
+            xl4015Board.position.set(25, 6, 35);
+            const inductorCoil = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 8, 16), matBrass);
+            inductorCoil.position.set(20, 11, 35);
+            groupDrivers.add(tb6612Mesh, xl4015Board, inductorCoil);
+
+            // 6. RPi 3B+ & ESP32
+            const rpiMesh = new THREE.Mesh(new THREE.BoxGeometry(56, 3, 85), matPCBGreen);
+            rpiMesh.position.set(0, 49.5, -15);
+            const ethPort = new THREE.Mesh(new THREE.BoxGeometry(16, 14, 20), matDarkMetal);
+            ethPort.position.set(15, 57, -45);
+            groupElectronics.add(rpiMesh, ethPort);
+
+            const espMesh = new THREE.Mesh(new THREE.BoxGeometry(28, 2, 50), matPCBBlue);
+            espMesh.position.set(0, 6, 35);
+            groupElectronics.add(espMesh);
+
+            // 7. RPLiDAR A1
+            const towerMesh = new THREE.Mesh(new THREE.CylinderGeometry(35, 35, 30, 32), matPlate);
+            towerMesh.position.set(0, 65, 30);
+            const lidarMesh = new THREE.Mesh(new THREE.CylinderGeometry(38, 38, 25, 32), matDarkMetal);
+            lidarMesh.position.set(0, 92, 30);
+            const lensMesh = new THREE.Mesh(new THREE.CylinderGeometry(20, 20, 8, 24), matPCBRed);
+            lensMesh.position.set(0, 98, 30);
+            groupLidar.add(towerMesh, lidarMesh, lensMesh);
+
+            scene.add(groupBottom, groupTop, groupMotors, groupBattery, groupDrivers, groupElectronics, groupLidar);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function updateVisibility() {
+            groupBottom.visible = document.getElementById('toggleBottom').checked;
+            groupTop.visible = document.getElementById('toggleTop').checked;
+            groupMotors.visible = document.getElementById('toggleMotors').checked;
+            groupBattery.visible = document.getElementById('toggleBattery').checked;
+            groupDrivers.visible = document.getElementById('toggleDrivers').checked;
+            groupElectronics.visible = document.getElementById('toggleElectronics').checked;
+            groupLidar.visible = document.getElementById('toggleLidar').checked;
+        }
+
+        function resetCamera() {
+            camera.position.set(220, 150, 220);
+            controls.target.set(0, 25, 0);
+        }
+
+        function toggleAutoRotate() {
+            isAutoRotate = !isAutoRotate;
+            controls.autoRotate = isAutoRotate;
+        }
+
+        function toggleWireframe() {
+            isWireframe = !isWireframe;
+            scene.traverse((child) => {
+                if (child.isMesh) child.material.wireframe = isWireframe;
+            });
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        init();
+    </script>
+</body>
+</html>

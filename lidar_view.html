@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPLiDAR A1 - 2D Radar Visualizer</title>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+        body { background-color: #0b0f19; color: #e0e6ed; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
+        header { margin-bottom: 12px; text-align: center; }
+        h1 { font-size: 1.6rem; color: #00f2fe; text-shadow: 0 0 10px rgba(0, 242, 254, 0.5); }
+        .status-container { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 5px; font-size: 0.9rem; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background-color: #ff3860; box-shadow: 0 0 8px #ff3860; }
+        .status-dot.connected { background-color: #00d1b2; box-shadow: 0 0 10px #00d1b2; }
+        .controls { display: flex; gap: 15px; background: #141b2d; padding: 10px 20px; border-radius: 8px; border: 1px solid #232d47; margin-bottom: 15px; align-items: center; }
+        input[type="text"] { background: #0f172a; border: 1px solid #334155; color: #38bdf8; padding: 4px 8px; border-radius: 4px; font-family: monospace; width: 130px; }
+        button { background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%); border: none; color: #0f172a; padding: 6px 14px; font-weight: bold; border-radius: 4px; cursor: pointer; }
+        .range-val { color: #38bdf8; font-weight: bold; }
+        #canvas-container { position: relative; border-radius: 50%; box-shadow: 0 0 30px rgba(0, 242, 254, 0.15); border: 2px solid #1e293b; }
+        canvas { display: block; border-radius: 50%; background: radial-gradient(circle, #0b1329 0%, #030712 100%); }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>RPLiDAR A1 - 2D Radar Screen</h1>
+        <div class="status-container">
+            <div id="statusDot" class="status-dot"></div>
+            <span id="statusText">Đang kết nối tới Raspberry Pi...</span>
+        </div>
+    </header>
+
+    <div class="controls">
+        <div>
+            <label>IP Pi: </label>
+            <input type="text" id="piIp" value="192.168.79.24">
+            <button onclick="connectRos()">Kết nối</button>
+        </div>
+        <div>
+            <label>Bán kính: </label>
+            <input type="range" id="maxDist" min="1" max="12" value="6" oninput="document.getElementById('distVal').innerText = this.value + 'm'">
+            <span id="distVal" class="range-val">6m</span>
+        </div>
+        <div>
+            <label>Điểm: </label>
+            <input type="range" id="ptSize" min="1" max="6" value="3" oninput="document.getElementById('sizeVal').innerText = this.value">
+            <span id="sizeVal" class="range-val">3</span>
+        </div>
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="radarCanvas" width="600" height="600"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('radarCanvas');
+        const ctx = canvas.getContext('2d');
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        let ros = null, scanSub = null, lastScanData = null;
+
+        function connectRos() {
+            const ip = document.getElementById('piIp').value.trim();
+            const wsUrl = `ws://${ip}:9090`;
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+
+            if (ros) { try { ros.close(); } catch(e){} }
+            statusDot.className = "status-dot";
+            statusText.innerText = `Đang kết nối tới ${wsUrl}...`;
+
+            ros = new ROSLIB.Ros({ url: wsUrl });
+            ros.on('connection', () => {
+                statusDot.className = "status-dot connected";
+                statusText.innerText = `Đã kết nối thành công tới Pi (${ip})`;
+                scanSub = new ROSLIB.Topic({ ros: ros, name: '/scan', messageType: 'sensor_msgs/msg/LaserScan' });
+                scanSub.subscribe((message) => { lastScanData = message; });
+            });
+            ros.on('error', () => {
+                statusDot.className = "status-dot";
+                statusText.innerText = "Chưa nhận tín hiệu. Hãy bật rosbridge trên Pi!";
+            });
+            ros.on('close', () => { statusDot.className = "status-dot"; statusText.innerText = "Đã ngắt kết nối."; });
+        }
+
+        function drawRadarGrid(maxDistance) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const maxRadius = canvas.width / 2 - 10;
+            const rings = 4;
+
+            for (let i = 1; i <= rings; i++) {
+                const r = (maxRadius / rings) * i;
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, r, 0, 2 * Math.PI);
+                ctx.strokeStyle = "rgba(0, 242, 254, 0.15)";
+                ctx.setLineDash([4, 4]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.fillStyle = "rgba(0, 242, 254, 0.5)";
+                ctx.font = "11px sans-serif";
+                ctx.fillText(((maxDistance / rings) * i).toFixed(1) + "m", centerX + 5, centerY - r + 12);
+            }
+
+            ctx.beginPath();
+            ctx.moveTo(centerX, 10); ctx.lineTo(centerX, canvas.height - 10);
+            ctx.moveTo(10, centerY); ctx.lineTo(canvas.width - 10, centerY);
+            ctx.strokeStyle = "rgba(0, 242, 254, 0.25)"; ctx.stroke();
+
+            ctx.beginPath(); ctx.arc(centerX, centerY, 5, 0, 2 * Math.PI);
+            ctx.fillStyle = "#00f2fe"; ctx.fill();
+        }
+
+        function render() {
+            const maxDistance = parseFloat(document.getElementById('maxDist').value);
+            const pointSize = parseFloat(document.getElementById('ptSize').value);
+            const maxRadius = canvas.width / 2 - 10;
+
+            drawRadarGrid(maxDistance);
+
+            if (lastScanData && lastScanData.ranges) {
+                const ranges = lastScanData.ranges;
+                const angleMin = lastScanData.angle_min;
+                const angleIncrement = lastScanData.angle_increment;
+
+                ctx.fillStyle = "#ff2e63";
+                ctx.shadowBlur = 6;
+                ctx.shadowColor = "#ff2e63";
+
+                for (let i = 0; i < ranges.length; i++) {
+                    const r = ranges[i];
+                    if (r < lastScanData.range_min || r > lastScanData.range_max || isNaN(r)) continue;
+                    if (r > maxDistance) continue;
+
+                    const angle = angleMin + i * angleIncrement;
+                    const pixelR = (r / maxDistance) * maxRadius;
+                    const x = centerX + pixelR * Math.cos(angle);
+                    const y = centerY + pixelR * Math.sin(angle);
+
+                    ctx.beginPath();
+                    ctx.arc(x, y, pointSize / 2, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+                ctx.shadowBlur = 0;
+            }
+            requestAnimationFrame(render);
+        }
+
+        connectRos();
+        render();
+    </script>
+</body>
+</html>
