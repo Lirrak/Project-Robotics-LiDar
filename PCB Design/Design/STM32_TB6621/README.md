@@ -1,4 +1,4 @@
-# README — Quá trình thực hiện schematic STM32F103C8T6 + TB6612FNG (điều khiển động cơ GA25)
+# README — Quá trình thực hiện schematic STM32F103C8T6 + TB6612FNG (điều khiển động cơ JGA25)
 
 Tài liệu này ghi lại toàn bộ quá trình thiết kế, review, và mô phỏng schematic cho module điều khiển động cơ GA25 dùng STM32F103C8T6 + driver TB6612FNG — dùng làm nhật ký kỹ thuật (design log) để tra cứu lại sau này.
 
@@ -9,7 +9,7 @@ Tài liệu này ghi lại toàn bộ quá trình thiết kế, review, và mô 
 Thiết kế 1 mạch PCB tích hợp:
 - MCU: **STM32F103C8T6** (LQFP48)
 - Driver động cơ: **TB6612FNG** (SSOP24)
-- Tải: động cơ DC giảm tốc **GA25** (tối đa 2 động cơ, kênh A và B)
+- Tải: động cơ DC giảm tốc **JGA25** (tối đa 2 động cơ, kênh A và B)
 - Đầy đủ các khối phụ trợ chuẩn: nguồn, reset, boot, decoupling — không chỉ đấu dây tín hiệu.
 
 ---
@@ -17,7 +17,7 @@ Thiết kế 1 mạch PCB tích hợp:
 ## 2. Kiến trúc tổng thể
 
 ```
-Header SWD ──▶ STM32F103C8T6 ──▶ (PWMA/PWMB, AIN1/AIN2, BIN1/BIN2, STBY) ──▶ TB6612FNG ──▶ Động cơ GA25 (A & B)
+Header SWD ──▶ STM32F103C8T6 ──▶ (PWMA/PWMB, AIN1/AIN2, BIN1/BIN2, STBY) ──▶ TB6612FNG ──▶ Động cơ JGA25 (A & B)
                     ▲                                                            ▲
              Nguồn logic 3.3V                                          Nguồn VM 6–12V
              + Reset/Boot                                               + nguồn VCC 5V
