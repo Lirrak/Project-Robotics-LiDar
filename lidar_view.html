@@ -2,8 +2,7 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RPLiDAR A1 - 2D Radar Visualizer</title>
+    <title>RPLiDAR A1 - 2D Radar Screen</title>
     <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
@@ -16,7 +15,6 @@
         .controls { display: flex; gap: 15px; background: #141b2d; padding: 10px 20px; border-radius: 8px; border: 1px solid #232d47; margin-bottom: 15px; align-items: center; }
         input[type="text"] { background: #0f172a; border: 1px solid #334155; color: #38bdf8; padding: 4px 8px; border-radius: 4px; font-family: monospace; width: 130px; }
         button { background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%); border: none; color: #0f172a; padding: 6px 14px; font-weight: bold; border-radius: 4px; cursor: pointer; }
-        .range-val { color: #38bdf8; font-weight: bold; }
         #canvas-container { position: relative; border-radius: 50%; box-shadow: 0 0 30px rgba(0, 242, 254, 0.15); border: 2px solid #1e293b; }
         canvas { display: block; border-radius: 50%; background: radial-gradient(circle, #0b1329 0%, #030712 100%); }
     </style>
@@ -26,25 +24,24 @@
         <h1>RPLiDAR A1 - 2D Radar Screen</h1>
         <div class="status-container">
             <div id="statusDot" class="status-dot"></div>
-            <span id="statusText">Đang kết nối tới Raspberry Pi...</span>
+            <span id="statusText">Chưa kết nối tới Raspberry Pi...</span>
         </div>
     </header>
 
     <div class="controls">
         <div>
             <label>IP Pi: </label>
-            <input type="text" id="piIp" value="192.168.79.24">
+            <input type="text" id="piIp" value="172.28.182.132">
             <button onclick="connectRos()">Kết nối</button>
         </div>
         <div>
             <label>Bán kính: </label>
-            <input type="range" id="maxDist" min="1" max="12" value="6" oninput="document.getElementById('distVal').innerText = this.value + 'm'">
-            <span id="distVal" class="range-val">6m</span>
+            <input type="range" id="maxDist" min="1" max="10" value="4" onchange="document.getElementById('rangeVal').innerText=this.value+'m'">
+            <span id="rangeVal">4m</span>
         </div>
         <div>
             <label>Điểm: </label>
-            <input type="range" id="ptSize" min="1" max="6" value="3" oninput="document.getElementById('sizeVal').innerText = this.value">
-            <span id="sizeVal" class="range-val">3</span>
+            <input type="range" id="ptSize" min="1" max="6" value="3">
         </div>
     </div>
 
@@ -70,17 +67,29 @@
             statusText.innerText = `Đang kết nối tới ${wsUrl}...`;
 
             ros = new ROSLIB.Ros({ url: wsUrl });
+
             ros.on('connection', () => {
                 statusDot.className = "status-dot connected";
                 statusText.innerText = `Đã kết nối thành công tới Pi (${ip})`;
-                scanSub = new ROSLIB.Topic({ ros: ros, name: '/scan', messageType: 'sensor_msgs/msg/LaserScan' });
-                scanSub.subscribe((message) => { lastScanData = message; });
+                scanSub = new ROSLIB.Topic({
+                    ros: ros,
+                    name: '/scan',
+                    messageType: 'sensor_msgs/msg/LaserScan'
+                });
+                scanSub.subscribe((message) => {
+                    lastScanData = message;
+                });
             });
+
             ros.on('error', () => {
                 statusDot.className = "status-dot";
-                statusText.innerText = "Chưa nhận tín hiệu. Hãy bật rosbridge trên Pi!";
+                statusText.innerText = "Lỗi kết nối WebSocket!";
             });
-            ros.on('close', () => { statusDot.className = "status-dot"; statusText.innerText = "Đã ngắt kết nối."; });
+
+            ros.on('close', () => {
+                statusDot.className = "status-dot";
+                statusText.innerText = "Đã ngắt kết nối.";
+            });
         }
 
         function drawRadarGrid(maxDistance) {
@@ -114,39 +123,39 @@
             const maxDistance = parseFloat(document.getElementById('maxDist').value);
             const pointSize = parseFloat(document.getElementById('ptSize').value);
             const maxRadius = canvas.width / 2 - 10;
+            const scale = maxRadius / maxDistance;
 
             drawRadarGrid(maxDistance);
 
             if (lastScanData && lastScanData.ranges) {
                 const ranges = lastScanData.ranges;
-                const angleMin = lastScanData.angle_min;
-                const angleIncrement = lastScanData.angle_increment;
+                const angleMin = lastScanData.angle_min || 0;
+                const angleIncrement = lastScanData.angle_increment || (2 * Math.PI / ranges.length);
 
                 ctx.fillStyle = "#ff2e63";
-                ctx.shadowBlur = 6;
                 ctx.shadowColor = "#ff2e63";
+                ctx.shadowBlur = 6;
 
                 for (let i = 0; i < ranges.length; i++) {
-                    const r = ranges[i];
-                    if (r < lastScanData.range_min || r > lastScanData.range_max || isNaN(r)) continue;
-                    if (r > maxDistance) continue;
+                    const dist = ranges[i];
+                    if (dist > 0.1 && dist <= maxDistance) {
+                        const angle = angleMin + (i * angleIncrement);
+                        const x = centerX + dist * scale * Math.cos(angle);
+                        const y = centerY + dist * scale * Math.sin(angle);
 
-                    const angle = angleMin + i * angleIncrement;
-                    const pixelR = (r / maxDistance) * maxRadius;
-                    const x = centerX + pixelR * Math.cos(angle);
-                    const y = centerY + pixelR * Math.sin(angle);
-
-                    ctx.beginPath();
-                    ctx.arc(x, y, pointSize / 2, 0, 2 * Math.PI);
-                    ctx.fill();
+                        ctx.beginPath();
+                        ctx.arc(x, y, pointSize, 0, 2 * Math.PI);
+                        ctx.fill();
+                    }
                 }
                 ctx.shadowBlur = 0;
             }
+
             requestAnimationFrame(render);
         }
 
-        connectRos();
         render();
+        connectRos();
     </script>
 </body>
 </html>
