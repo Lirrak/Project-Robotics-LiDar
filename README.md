@@ -15,16 +15,16 @@ Dự án mở thiết kế và chế tạo **Robot Tự Hành Hai Bánh Vi Sai (
   - Thiết kế 2 tầng (tầng đáy chứa động cơ, pin 12V, driver; tầng đỉnh chứa Pi 3B+ và LiDAR A1).
   - Khe khoét bánh xe rộng **76mm x 50mm** loại bỏ 100% tình trạng cấn bánh xe 65mm.
   - Sẵn sàng xuất file in 3D STL (`stl_files/`).
-- 🌐 **Giao Diện Web 3D Tương Tác (`chassis_3d_view.html`)**:
+- 🌐 **Giao Diện Web 3D Tương Tác (`LiDar/chassis_3d_view.html`)**:
   - Trình xem 3D xoay 360° bằng Three.js, bật/tắt từng lớp linh kiện và tải file STL trực tiếp.
 - ⚡ **ESP32 Real-Time Firmware (`esp32_firmware/`)**:
   - Đọc ngắt Encoder chính xác, điều khiển PID vòng kín 20Hz cho động cơ DC JGA25-370.
   - Mạch cầu H TB6612FNG và giao tiếp UART Serial chuẩn hóa gói tin `CMD,v,w` và `TELE`.
 - 🐍 **Raspberry Pi Serial Bridge (`rpi_esp32_bridge.py`)**:
   - Chuyển đổi lệnh vận tốc ROS/Web UI thành xung động cơ và tính toán Odometry dead-reckoning $(x, y, \theta)$.
-- 📡 **Web Radar LiDAR 2D Visualizer (`lidar_view.html`)**:
+- 📡 **Web Radar LiDAR 2D Visualizer (`LiDar/lidar_view.html`)**:
   - Hiển thị đám mây điểm 2D từ RPLiDAR A1 thời gian thực qua WebSocket ROSBridge (`ws://<IP-Pi>:9090`).
-- 🧠 **Mô Phỏng Học Máy AI / Path Simulator (`robot_sim.html`)**:
+- 🧠 **Mô Phỏng Học Máy AI / Path Simulator (`LiDar/robot_sim.html`)**:
   - Thuật toán Reinforcement Learning (Q-Learning / TensorFlow.js) huấn luyện robot né vật cản & chọn đường đi ngắn nhất.
 
 ---
@@ -96,9 +96,11 @@ Project Robot/
 │   └── full_robot_chassis.stl     # Mô hình 3D tổng thể hoàn chỉnh
 ├── esp32_firmware/
 │   └── esp32_firmware.ino         # Mã nguồn Arduino C++ nạp cho ESP32
-├── chassis_3d_view.html           # Trình xem mô hình robot 3D tương tác 360° (Three.js)
-├── lidar_view.html                # Trình quan sát 2D Radar LiDAR thời gian thực
-├── robot_sim.html                 # Trình mô phỏng huấn luyện AI Reinforcement Learning
+├── LiDar/
+│   ├── chassis_3d_view.html       # Trình xem mô hình robot 3D tương tác 360° (Three.js)
+│   ├── lidar_server.py            # WebSocket server đọc dữ liệu RPLiDAR
+│   ├── lidar_view.html             # Trình quan sát 2D Radar LiDAR thời gian thực
+│   └── robot_sim.html              # Trình mô phỏng huấn luyện AI Reinforcement Learning
 ├── generate_stl.py                # Script Python tự động tạo các file mesh STL chuẩn 3D
 ├── rpi_esp32_bridge.py            # Bridge Python giao tiếp Serial UART Pi <-> ESP32
 └── README.md                      # Tài liệu hướng dẫn dự án
@@ -109,7 +111,7 @@ Project Robot/
 ## 🚀 Hướng Dẫn Nạp & Chạy Dự Án
 
 ### 1. In 3D Khung Xe
-- Tải các file `.stl` trong thư mục `stl_files/` (hoặc nhấn nút Download trực tiếp từ `chassis_3d_view.html`).
+- Tải các file `.stl` trong thư mục `stl_files/` (hoặc nhấn nút Download trực tiếp từ `LiDar/chassis_3d_view.html`).
 - Sử dụng phần mềm Cura / PrusaSlicer với thiết lập khuyến nghị:
   - Độ dày lớp (Layer Height): `0.2mm`
   - Mật độ in (Infill): `25% - 30%` (Grid / Gyroid)
@@ -129,8 +131,8 @@ Project Robot/
   ```
 
 ### 4. Quan Sát Mô Hình 3D & LiDAR Trên Web
-- **Xem khung xe 3D tương tác**: Mở file `chassis_3d_view.html` trên trình duyệt.
-- **Xem quét 2D Radar LiDAR**: Mở file `lidar_view.html` và nhập IP của Raspberry Pi (Chạy ROSBridge server `roslaunch rosbridge_server rosbridge_websocket.launch`).
+- **Xem khung xe 3D tương tác**: Mở file `LiDar/chassis_3d_view.html` trên trình duyệt.
+- **Xem quét 2D Radar LiDAR**: Mở file `LiDar/lidar_view.html` và nhập IP của Raspberry Pi (Chạy ROSBridge server `roslaunch rosbridge_server rosbridge_websocket.launch`).
 
 ---
 
