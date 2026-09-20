@@ -1,0 +1,16 @@
+[Unit]
+Description=RPLiDAR A1 ROSBridge Server Service
+After=network-online.target lidar-web.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=lirrak
+WorkingDirectory=/home/lirrak/Project-Robotics-LiDar/LiDar
+ExecStartPre=/bin/sleep 5
+ExecStart=/usr/bin/python3 /home/lirrak/Project-Robotics-LiDar/LiDar/lidar_server.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
