@@ -164,6 +164,13 @@ Sau khi vào container, luôn source ROS2:
 source /opt/ros/jazzy/setup.bash
 ```
 
+Nếu muốn ROS2 được nạp tự động mỗi lần mở shell trong container:
+
+```bash
+echo 'source /opt/ros/jazzy/setup.bash' >> /root/.bashrc
+source /root/.bashrc
+```
+
 Kiểm tra môi trường:
 
 ```bash
@@ -236,29 +243,37 @@ sudo systemctl stop lidar-server.service 2>/dev/null || true
 Mở shell ROS2:
 
 ```bash
-docker exec -it ros2-lidar bash
-source /opt/ros/jazzy/setup.bash
+docker exec -it ros2-lidar bash -lc \
+  'source /opt/ros/jazzy/setup.bash && exec bash'
 ```
 
 Chạy driver:
 
 ```bash
-ros2 launch rplidar_ros rplidar_a1_launch.py
+ros2 launch rplidar_ros rplidar.launch.py
 ```
 
-Giữ terminal này mở. Nếu launch file không tồn tại, kiểm tra các launch file có sẵn:
+Launch file `rplidar.launch.py` trong package Jazzy đã cấu hình sẵn cho RPLiDAR A1/A2:
+
+- Serial port: `/dev/ttyUSB0`
+- Baudrate: `115200`
+- Frame: `laser`
+
+Giữ terminal này mở. Nếu cần kiểm tra các launch file có sẵn:
 
 ```bash
 find /opt/ros/jazzy/share/rplidar_ros -type f -name '*.launch.py' -o -name '*.launch.xml'
 ```
+
+Lưu ý: package Jazzy hiện tại không có file `rplidar_a1_launch.py`. Không dùng tên file đó; dùng `rplidar.launch.py` cho RPLiDAR A1.
 
 ## 10. Kiểm tra node và topic `/scan`
 
 Mở terminal thứ hai trên host:
 
 ```bash
-docker exec -it ros2-lidar bash
-source /opt/ros/jazzy/setup.bash
+docker exec -it ros2-lidar bash -lc \
+  'source /opt/ros/jazzy/setup.bash && exec bash'
 ```
 
 Kiểm tra node:
