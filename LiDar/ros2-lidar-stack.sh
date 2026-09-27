@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -Eeuo pipefail
+set -Eeo pipefail
 
 pid_file=/tmp/ros2-lidar-stack.pid
 script_path=/workspace/Project-Robotics-LiDar/LiDar/ros2-lidar-stack.sh
