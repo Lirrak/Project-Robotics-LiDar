@@ -1,0 +1,18 @@
+[Unit]
+Description=ROS2 LiDAR driver and ROSBridge
+Requires=docker.service lidar-web.service
+After=network-online.target docker.service lidar-web.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/lirrak/Project-Robotics-LiDar
+ExecStartPre=/bin/sh -c '/usr/bin/docker inspect --format={{.State.Running}} ros2-lidar 2>/dev/null | /usr/bin/grep -qx true || /usr/bin/docker start ros2-lidar'
+ExecStart=/usr/bin/docker exec ros2-lidar bash /workspace/Project-Robotics-LiDar/LiDar/ros2-lidar-stack.sh run
+ExecStop=/usr/bin/docker exec ros2-lidar bash /workspace/Project-Robotics-LiDar/LiDar/ros2-lidar-stack.sh stop
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

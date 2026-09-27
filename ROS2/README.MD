@@ -229,9 +229,189 @@ Kết quả đúng là mỗi package trả về:
 /opt/ros/jazzy
 ```
 
-## 9. Chạy driver RPLiDAR bằng ROS2
+## 9. Hướng dẫn sử dụng Docker
+
+### 9.1. Làm việc với container ROS2
+
+Mở shell trên host để kiểm tra container:
+
+```bash
+docker ps -a --filter name=ros2-lidar
+docker ps --filter name=ros2-lidar
+docker logs ros2-lidar
+```
+
+Vào container:
+
+```bash
+docker exec -it ros2-lidar bash
+```
+
+Nếu muốn chạy một lệnh trong container ngay mà không mở shell:
+
+```bash
+docker exec ros2-lidar bash -lc 'source /opt/ros/jazzy/setup.bash && ros2 node list'
+```
+
+Khởi động lại container đã dừng:
+
+```bash
+docker start ros2-lidar
+```
+
+Dừng container:
+
+```bash
+docker stop ros2-lidar
+```
+
+Xóa container:
+
+```bash
+docker rm -f ros2-lidar
+```
+
+### 9.2. Tạo lại container nếu cần
+
+```bash
+docker rm -f ros2-lidar 2>/dev/null || true
+
+docker run -d \
+  --name ros2-lidar \
+  --network host \
+  --device=/dev/ttyUSB0 \
+  --group-add "$(getent group dialout | cut -d: -f3)" \
+  -v "$PWD:/workspace/Project-Robotics-LiDar" \
+  ros:jazzy-ros-base \
+  sleep infinity
+```
+
+### 9.3. Kiểm tra môi trường ROS2 trong container
+
+```bash
+docker exec -it ros2-lidar bash
+source /opt/ros/jazzy/setup.bash
+echo "$ROS_DISTRO"
+command -v ros2
+ros2 topic list
+```
+
+### 9.4. Xử lý sự cố nhanh
+
+Nếu `ros2` không tìm thấy:
+
+```bash
+docker exec -it ros2-lidar bash
+source /opt/ros/jazzy/setup.bash
+```
+
+Nếu `docker exec` báo container không chạy:
+
+```bash
+docker ps -a --filter name=ros2-lidar
+docker start ros2-lidar
+```
+
+Nếu `/dev/ttyUSB0` không thấy trong container:
+
+```bash
+ls -l /dev/ttyUSB0
+```
+
+Nếu cần kiểm tra port và xung đột 9090:
+
+```bash
+ss -lntup | grep ':9090' || true
+```
+
+Nếu port 9090 đang bị chiếm bởi server Python cũ:
+
+```bash
+pkill -f lidar_server.py || true
+sudo systemctl stop lidar-server.service 2>/dev/null || true
+```
+
+## 10. Chạy driver RPLiDAR bằng ROS2
 
 Trước khi chạy driver, cần đảm bảo không có chương trình khác đang truy cập `/dev/ttyUSB0`.
+
+### 10.1. Quy trình đầy đủ từ terminal Raspberry Pi
+
+Các lệnh `docker` phải chạy trên terminal host của Raspberry Pi. Không chạy lệnh `docker` sau khi đã vào trong container.
+
+#### Terminal host: kiểm tra và khởi động container
+
+```bash
+docker ps -a --filter name=ros2-lidar
+docker start ros2-lidar 2>/dev/null || true
+docker ps --filter name=ros2-lidar
+```
+
+Nếu container chưa tồn tại, tạo lại từ thư mục gốc của project:
+
+```bash
+docker run -d \
+  --name ros2-lidar \
+  --network host \
+  --device=/dev/ttyUSB0 \
+  --group-add "$(getent group dialout | cut -d: -f3)" \
+  -v "$PWD:/workspace/Project-Robotics-LiDar" \
+  ros:jazzy-ros-base \
+  sleep infinity
+```
+
+#### Terminal 1: chạy driver LiDAR trong container
+
+```bash
+docker exec -it ros2-lidar bash
+source /opt/ros/jazzy/setup.bash
+ros2 launch rplidar_ros rplidar.launch.py
+```
+
+Khi thấy thông báo `RPLIDAR running on ROS 2 package rplidar_ros`, driver đã nhận LiDAR. Giữ terminal này mở.
+
+#### Terminal 2: kiểm tra topic `/scan`
+
+Mở một terminal host mới trên Raspberry Pi:
+
+```bash
+docker exec -it ros2-lidar bash
+source /opt/ros/jazzy/setup.bash
+ros2 node list
+ros2 topic list
+ros2 topic type /scan
+ros2 topic echo /scan --once
+```
+
+Kết quả cần có:
+
+```text
+/scan
+sensor_msgs/msg/LaserScan
+```
+
+Nếu chỉ thấy `/parameter_events` và `/rosout`, terminal chạy driver chưa hoạt động hoặc driver đã dừng. Kiểm tra lại Terminal 1 và giữ lệnh `ros2 launch` chạy liên tục.
+
+#### Sau khi `/scan` hoạt động: chạy ROSBridge
+
+Mở Terminal 3 trên host:
+
+```bash
+docker exec -it ros2-lidar bash
+source /opt/ros/jazzy/setup.bash
+ros2 launch rosbridge_server rosbridge_websocket_launch.xml
+```
+
+ROSBridge sẽ cung cấp WebSocket tại `ws://<IP-Raspberry-Pi>:9090` để `LiDar/lidar_view.html` kết nối.
+
+#### Phân biệt hai môi trường
+
+| Môi trường | Lệnh chính |
+|:--|:--|
+| Raspberry Pi host | `docker ps`, `docker start`, `docker exec` |
+| ROS2 container | `source /opt/ros/jazzy/setup.bash`, `ros2 launch`, `ros2 topic` |
+
+Nếu thấy `bash: docker: command not found`, bạn đang chạy lệnh Docker bên trong container hoặc ở shell không có Docker CLI. Thoát container bằng `exit`, sau đó chạy lệnh Docker trên terminal host.
 
 Trong một terminal host, dừng server Python cũ nếu nó đang chạy:
 
@@ -331,6 +511,33 @@ sensor_msgs/msg/LaserScan
 ```
 
 Do đó có thể giữ cách kết nối WebSocket hiện tại sau khi thay server Python bằng ROSBridge thật.
+
+### Chạy tự động bằng systemd
+
+Service `ros2-lidar-stack.service` khởi chạy driver RPLiDAR và ROSBridge trong container. Service này phụ thuộc vào `docker.service` và `lidar-web.service`; web service hiện tại phục vụ giao diện trên port `8000`.
+
+Trước khi bật service, dừng các lệnh `ros2 launch` đã chạy thủ công bằng `Ctrl+C` trong terminal tương ứng để tránh tranh cổng `9090` hoặc thiết bị `/dev/ttyUSB0`. Trên Raspberry Pi host, chạy:
+
+```bash
+sudo cp LiDar/ros2-lidar-stack.service /etc/systemd/system/ros2-lidar-stack.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now ros2-lidar-stack.service
+```
+
+Kiểm tra service và topic:
+
+```bash
+systemctl status ros2-lidar-stack.service --no-pager
+docker exec ros2-lidar bash -lc 'source /opt/ros/jazzy/setup.bash && ros2 topic echo /scan --once'
+```
+
+Mở giao diện từ thiết bị cùng mạng với Raspberry Pi tại `http://<IP-Raspberry-Pi>:8000/LiDar/lidar_view.html`. Giao diện kết nối ROSBridge qua `ws://<IP-Raspberry-Pi>:9090`.
+
+Dừng service:
+
+```bash
+sudo systemctl disable --now ros2-lidar-stack.service
+```
 
 ## 12. Chạy laser_filters
 
